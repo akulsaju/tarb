@@ -13,6 +13,9 @@
     },
     "android": {
       "package": "com.akulsaju.vybe"
-    }
+    },
+    "plugins": [
+      "expo-status-bar"
+    ]
   }
 }
