@@ -145,7 +145,8 @@ function App() {
   }, [chats])
 
   useEffect(() => {
-    messagesEnd.current?.scrollIntoView({ behavior: 'smooth' })
+    const container = messagesEnd.current?.closest('.message-scroll')
+    if (container) container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' })
   }, [activeId, chats])
 
   useEffect(() => {
