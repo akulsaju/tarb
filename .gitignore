@@ -5,3 +5,6 @@ dist/
 .vercel
 
 .vercel/
+
+mobile/node_modules/
+mobile/.expo/

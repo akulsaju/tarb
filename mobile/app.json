@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "name": "VYBE",
+    "slug": "vybe",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "scheme": "vybe",
+    "backgroundColor": "#f3f5fa",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.akulsaju.vybe"
+    },
+    "android": {
+      "package": "com.akulsaju.vybe"
+    }
+  }
+}
