@@ -129,7 +129,29 @@ function App() {
   const [showEmoji, setShowEmoji] = useState(false)
   const [call, setCall] = useState<'voice' | 'video' | null>(null)
   const [toast, setToast] = useState('')
-  const [darkMode, setDarkMode] = useState(false)
+  const [themePref, setThemePref] = useState<'system' | 'light' | 'dark'>(() => {
+    const urlTheme = new URLSearchParams(window.location.search).get('theme')
+    if (urlTheme === 'dark' || urlTheme === 'light') return urlTheme
+    const saved = localStorage.getItem('vybe-theme')
+    return saved === 'dark' || saved === 'light' ? saved : 'system'
+  })
+  const [systemDark, setSystemDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches)
+  const darkMode = themePref === 'dark' || (themePref === 'system' && systemDark)
+
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
+    const onChange = (event: MediaQueryListEvent) => setSystemDark(event.matches)
+    media.addEventListener('change', onChange)
+    return () => media.removeEventListener('change', onChange)
+  }, [])
+
+  useEffect(() => {
+    localStorage.setItem('vybe-theme', themePref)
+  }, [themePref])
+
+  function cycleTheme() {
+    setThemePref((current) => current === 'system' ? 'light' : current === 'light' ? 'dark' : 'system')
+  }
   const searchInput = useRef<HTMLInputElement>(null)
   const contactSearchInput = useRef<HTMLInputElement>(null)
   const messagesEnd = useRef<HTMLDivElement>(null)
@@ -281,7 +303,7 @@ function App() {
               <div className="sidebar-footer"><span className="secure-dot" /> Your conversations are yours <LockKeyhole size={13} /></div>
             </>
           )}
-          {activeTab !== 'Chats' && <SectionList tab={activeTab} onSelect={(message) => notify(message)} />}
+          {activeTab !== 'Chats' && <SectionList tab={activeTab} themePref={themePref} onToggleTheme={cycleTheme} onSelect={(message) => notify(message)} />}
         </section>
 
         <section className="conversation glass">
@@ -400,10 +422,10 @@ function App() {
         {navItems.map(({ id, icon: Icon }) => <button key={id} className={activeTab === id ? 'active' : ''}
           aria-label={id} onClick={() => { setActiveTab(id); setMobileChatOpen(false) }}><Icon size={19} /><span>{id}</span></button>)}
       </div>
-      <button className="theme-toggle" aria-label="Toggle dark mode" title="Toggle appearance" onClick={() => setDarkMode(!darkMode)}>
-        {darkMode ? <Sparkles size={16} /> : <ChevronDown size={16} />}
+      <button className="theme-toggle" aria-label={`Appearance: ${themePref}. Tap to change`} title="Change appearance" onClick={cycleTheme}>
+        {themePref === 'dark' ? <Sparkles size={16} /> : themePref === 'light' ? <Zap size={16} /> : <ChevronDown size={16} />}
       </button>
-      <div className="theme-label">{darkMode ? 'DARK' : 'LIGHT'}</div>
+      <div className="theme-label">{themePref.toUpperCase()}</div>
     </main>
   )
 }
@@ -419,7 +441,12 @@ function ChatRow({ chat, active, onClick }: { chat: Chat; active: boolean; onCli
   )
 }
 
-function SectionList({ tab, onSelect }: { tab: string; onSelect: (message: string) => void }) {
+function SectionList({ tab, onSelect, themePref, onToggleTheme }: {
+  tab: string
+  onSelect: (message: string) => void
+  themePref: 'system' | 'light' | 'dark'
+  onToggleTheme: () => void
+}) {
   const [activeFilter, setActiveFilter] = useState('All')
   const callHistory = [
     ['MC', 'Maya Chen', 'Today, 10:42 AM', 'video', 'coral'],
@@ -467,6 +494,11 @@ function SectionList({ tab, onSelect }: { tab: string; onSelect: (message: strin
     <div className="section-content profile-section">
       <div className="profile-cover"><span className="cover-orb" /><button aria-label="Edit profile accent" onClick={() => onSelect('Profile accent customization is coming soon')}><Settings2 size={16} /></button></div>
       <div className="profile-info"><Avatar initials="JD" color="lavender" size="large" /><h2>Jordan Davis</h2><p>@jordandavis</p><span>Here for the little moments ✨</span></div>
+      <button className="settings-row" onClick={onToggleTheme}>
+        <span className="setting-icon">{themePref === 'dark' ? <Sparkles size={17} /> : themePref === 'light' ? <Zap size={17} /> : <Settings2 size={17} />}</span>
+        <span><b>Appearance</b><small>{themePref === 'system' ? 'Following your device' : themePref === 'dark' ? 'Dark' : 'Light'}</small></span>
+        <span className="theme-badge">{themePref === 'system' ? 'Auto' : themePref === 'dark' ? 'Dark' : 'Light'}</span>
+      </button>
       {[
         [Bell, 'Notifications', 'Make it your kind of quiet'],
         [LockKeyhole, 'Privacy & security', 'Your space, your rules'],

@@ -7,15 +7,35 @@
     "userInterfaceStyle": "automatic",
     "scheme": "vybe",
     "backgroundColor": "#f3f5fa",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
+    "plugins": [
+      [
+        "expo-status-bar",
+        {
+          "style": "auto"
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#6d5bd0"
+        }
+      ]
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.akulsaju.vybe"
     },
     "android": {
-      "package": "com.akulsaju.vybe"
-    },
-    "plugins": [
-      "expo-status-bar"
-    ]
+      "package": "com.akulsaju.vybe",
+      "permissions": ["POST_NOTIFICATIONS"]
+    }
   }
 }
