@@ -8,3 +8,4 @@ dist/
 
 mobile/node_modules/
 mobile/.expo/
+.env*

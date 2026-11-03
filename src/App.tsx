@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Archive, ArrowLeft, AtSign, Bell, Bookmark, CalendarDays, Check, CheckCheck,
-  ChevronDown, ChevronRight, CircleHelp, Hash, Image, Info, ListFilter, LockKeyhole,
-  MessageCircle, Mic, MoreHorizontal, Paperclip, Phone, Plus, Search, Send,
-  Settings2, Smile, Sparkles, Video, X, Zap,
+  ChevronDown, ChevronRight, CircleHelp, Eye, EyeOff, Hash, Image, Info, ListFilter,
+  Lock, LockKeyhole, LogOut, Mail, MessageCircle, Mic, MoreHorizontal, Paperclip,
+  Phone, Plus, Search, Send, Settings2, Smile, Sparkles, UserRound, Video, X, Zap,
 } from 'lucide-react'
 
 type Message = {
@@ -107,15 +107,184 @@ function formatTime() {
   return new Intl.DateTimeFormat([], { hour: 'numeric', minute: '2-digit' }).format(new Date())
 }
 
-function App() {
-  const [chats, setChats] = useState<Chat[]>(() => {
-    try {
-      const saved = localStorage.getItem('vybe-chats')
-      return saved ? JSON.parse(saved) as Chat[] : initialChats
-    } catch {
-      return initialChats
-    }
+type Account = {
+  id: string
+  name: string
+  username: string
+  email: string
+}
+
+async function authenticate(body: Record<string, string>) {
+  const response = await fetch('/api/auth', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    cache: 'no-store',
+    body: JSON.stringify(body),
   })
+  if (!response.headers.get('content-type')?.includes('application/json')) {
+    throw new Error('The account service is unavailable. Please try again shortly.')
+  }
+  const result = await response.json() as { user?: Account; error?: string }
+  if (!response.ok) throw new Error(result.error || 'Unable to complete authentication.')
+  return result
+}
+
+function initialsOf(name: string) {
+  return name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase() ?? '').join('') || 'V'
+}
+
+function useThemePreference() {
+  const [themePref, setThemePref] = useState<'system' | 'light' | 'dark'>(() => {
+    const urlTheme = new URLSearchParams(window.location.search).get('theme')
+    if (urlTheme === 'dark' || urlTheme === 'light') return urlTheme
+    return 'dark'
+  })
+  const [systemDark, setSystemDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches)
+  const darkMode = themePref === 'dark' || (themePref === 'system' && systemDark)
+
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
+    const onChange = (event: MediaQueryListEvent) => setSystemDark(event.matches)
+    media.addEventListener('change', onChange)
+    return () => media.removeEventListener('change', onChange)
+  }, [])
+
+  function cycleTheme() {
+    setThemePref((current) => current === 'system' ? 'light' : current === 'light' ? 'dark' : 'system')
+  }
+
+  return { darkMode, themePref, cycleTheme }
+}
+
+function AuthScreen({ dark, onAuth }: { dark: boolean; onAuth: (account: Account) => void }) {
+  const [mode, setMode] = useState<'login' | 'signup'>('login')
+  const [name, setName] = useState('')
+  const [username, setUsername] = useState('')
+  const [email, setEmail] = useState('')
+  const [identifier, setIdentifier] = useState('')
+  const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  function switchMode(next: 'login' | 'signup') {
+    setMode(next)
+    setError('')
+  }
+
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault()
+    if (busy) return
+    setError('')
+    setBusy(true)
+    try {
+      if (mode === 'signup') {
+        const trimmedName = name.trim()
+        const trimmedUsername = username.trim().toLowerCase().replace(/[^a-z0-9_.]/g, '')
+        const trimmedEmail = email.trim().toLowerCase()
+        if (trimmedName.length < 2) throw new Error('Please enter your name.')
+        if (trimmedUsername.length < 3) throw new Error('Username needs at least 3 letters or numbers.')
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) throw new Error('Please enter a valid email address.')
+        if (password.length < 10) throw new Error('Password needs at least 10 characters.')
+        const result = await authenticate({
+          action: 'signup', name: trimmedName, username: trimmedUsername,
+          email: trimmedEmail, password,
+        })
+        if (!result.user) throw new Error('The server did not return an account.')
+        onAuth(result.user)
+      } else {
+        const id = identifier.trim().toLowerCase()
+        if (!id || !password) throw new Error('Enter your email and password.')
+        const result = await authenticate({ action: 'login', email: id, password })
+        if (!result.user) throw new Error('The server did not return an account.')
+        onAuth(result.user)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <main className={dark ? 'auth-shell dark' : 'auth-shell'}>
+      <div className="ambient ambient-one" />
+      <div className="ambient ambient-two" />
+      <section className="auth-card glass">
+        <a className="brand-mark auth-brand" href="#" onClick={(event) => event.preventDefault()} aria-label="VYBE">v<span>.</span></a>
+        <h1>{mode === 'login' ? 'Welcome back' : 'Create your account'}</h1>
+        <p>{mode === 'login' ? 'Sign in to pick up your conversations.' : 'Join VYBE and start your first conversation.'}</p>
+        <div className="auth-tabs" role="tablist">
+          <button role="tab" aria-selected={mode === 'login'} className={mode === 'login' ? 'active' : ''} onClick={() => switchMode('login')}>Sign in</button>
+          <button role="tab" aria-selected={mode === 'signup'} className={mode === 'signup' ? 'active' : ''} onClick={() => switchMode('signup')}>Create account</button>
+        </div>
+        <form onSubmit={handleSubmit} noValidate>
+          {mode === 'signup' && (
+            <>
+              <label className="auth-field"><UserRound size={16} />
+                <input aria-label="Display name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Display name" autoComplete="name" maxLength={80} />
+              </label>
+              <label className="auth-field"><AtSign size={16} />
+                <input aria-label="Display handle" value={username} onChange={(event) => setUsername(event.target.value)} placeholder="Display handle" autoComplete="username" maxLength={30} />
+              </label>
+              <label className="auth-field"><Mail size={16} />
+                <input aria-label="Email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" type="email" autoComplete="email" maxLength={254} />
+              </label>
+            </>
+          )}
+          {mode === 'login' && (
+            <label className="auth-field"><UserRound size={16} />
+              <input aria-label="Email" value={identifier} onChange={(event) => setIdentifier(event.target.value)} placeholder="Email address" type="email" autoComplete="username" maxLength={254} />
+            </label>
+          )}
+          <label className="auth-field"><Lock size={16} />
+            <input aria-label="Password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder={mode === 'signup' ? 'Password (10+ characters)' : 'Password'} maxLength={128} type={showPassword ? 'text' : 'password'} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
+            <button type="button" className="password-toggle" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword(!showPassword)}>
+              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </label>
+          {error && <p className="auth-error" role="alert">{error}</p>}
+          <button className="auth-submit" type="submit" disabled={busy}>
+            {busy ? 'One moment…' : mode === 'login' ? 'Sign in' : 'Create account'}
+          </button>
+        </form>
+        <p className="auth-footnote">Your account is stored on our server, not in this browser. Sign in with your email on any device.</p>
+      </section>
+    </main>
+  )
+}
+
+export default function App() {
+  const { darkMode, themePref, cycleTheme } = useThemePreference()
+  const [user, setUser] = useState<Account | null>(null)
+  const [logoutError, setLogoutError] = useState('')
+
+  async function handleLogout() {
+    try {
+      await authenticate({ action: 'logout' })
+      setLogoutError('')
+      setUser(null)
+    } catch (error) {
+      setLogoutError(error instanceof Error ? error.message : 'Unable to sign out. Please try again.')
+    }
+  }
+
+  if (!user) {
+    return <AuthScreen dark={darkMode} onAuth={setUser} />
+  }
+  return <><VybeApp key={user.id} user={user} darkMode={darkMode} themePref={themePref} onToggleTheme={cycleTheme} onLogout={handleLogout} />
+    {logoutError && <div className="toast" role="alert">{logoutError}</div>}</>
+}
+
+function VybeApp({ user, darkMode, themePref, onToggleTheme, onLogout }: {
+  user: Account
+  darkMode: boolean
+  themePref: 'system' | 'light' | 'dark'
+  onToggleTheme: () => void
+  onLogout: () => void
+}) {
+  const [chats, setChats] = useState<Chat[]>(initialChats)
   const [activeId, setActiveId] = useState('maya')
   const [activeTab, setActiveTab] = useState<(typeof navItems)[number]['id']>('Chats')
   const [search, setSearch] = useState('')
@@ -129,29 +298,6 @@ function App() {
   const [showEmoji, setShowEmoji] = useState(false)
   const [call, setCall] = useState<'voice' | 'video' | null>(null)
   const [toast, setToast] = useState('')
-  const [themePref, setThemePref] = useState<'system' | 'light' | 'dark'>(() => {
-    const urlTheme = new URLSearchParams(window.location.search).get('theme')
-    if (urlTheme === 'dark' || urlTheme === 'light') return urlTheme
-    const saved = localStorage.getItem('vybe-theme')
-    return saved === 'dark' || saved === 'light' ? saved : 'system'
-  })
-  const [systemDark, setSystemDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches)
-  const darkMode = themePref === 'dark' || (themePref === 'system' && systemDark)
-
-  useEffect(() => {
-    const media = window.matchMedia('(prefers-color-scheme: dark)')
-    const onChange = (event: MediaQueryListEvent) => setSystemDark(event.matches)
-    media.addEventListener('change', onChange)
-    return () => media.removeEventListener('change', onChange)
-  }, [])
-
-  useEffect(() => {
-    localStorage.setItem('vybe-theme', themePref)
-  }, [themePref])
-
-  function cycleTheme() {
-    setThemePref((current) => current === 'system' ? 'light' : current === 'light' ? 'dark' : 'system')
-  }
   const searchInput = useRef<HTMLInputElement>(null)
   const contactSearchInput = useRef<HTMLInputElement>(null)
   const messagesEnd = useRef<HTMLDivElement>(null)
@@ -161,10 +307,6 @@ function App() {
       || chat.messages.some((message) => message.text.toLowerCase().includes(search.toLowerCase())))
     .filter((chat) => chatFilter === 'All' || (chatFilter === 'Unread' ? chat.unread > 0 : chat.group))
     .sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned))), [chats, search, chatFilter])
-
-  useEffect(() => {
-    localStorage.setItem('vybe-chats', JSON.stringify(chats))
-  }, [chats])
 
   useEffect(() => {
     const container = messagesEnd.current?.closest('.message-scroll')
@@ -256,7 +398,7 @@ function App() {
           <div className="rail-bottom">
             <button className="rail-button" title="Help" aria-label="Help" onClick={() => notify('VYBE help center — coming soon')}><CircleHelp size={20} /></button>
             <button className="profile-button" title="Your profile" aria-label="Your profile" onClick={() => { setActiveTab('Profile'); setMobileChatOpen(false) }}>
-              <Avatar initials="JD" color="lavender" />
+              <Avatar initials={initialsOf(user.name)} color="lavender" />
             </button>
           </div>
         </aside>
@@ -300,10 +442,10 @@ function App() {
                 ))}
                 {!visibleChats.length && <div className="empty-search"><Search size={19} /><span>No conversations found</span></div>}
               </div>
-              <div className="sidebar-footer"><span className="secure-dot" /> Your conversations are yours <LockKeyhole size={13} /></div>
+              <div className="sidebar-footer"><span className="secure-dot" /> Sample conversations <MessageCircle size={13} /></div>
             </>
           )}
-          {activeTab !== 'Chats' && <SectionList tab={activeTab} themePref={themePref} onToggleTheme={cycleTheme} onSelect={(message) => notify(message)} />}
+          {activeTab !== 'Chats' && <SectionList tab={activeTab} user={user} themePref={themePref} onToggleTheme={onToggleTheme} onLogout={onLogout} onSelect={(message) => notify(message)} />}
         </section>
 
         <section className="conversation glass">
@@ -329,11 +471,18 @@ function App() {
           <div className="message-scroll">
             <div className="message-context"><span className={`context-avatar avatar-${activeChat?.color ?? 'coral'}`}>{activeChat?.initials ?? 'V'}</span>
               <span>This is the beginning of your conversation with <b>{activeChat?.name}</b>.</span></div>
-            {activeChat?.messages.map((message, index) => (
-              <div key={message.id} className={`message-line ${message.mine ? 'mine' : ''}`}>
-                {!message.mine && <Avatar initials={activeChat.initials} color={activeChat.color} size="small" />}
+            {activeChat?.messages.map((message, index) => {
+              const previous = activeChat.messages[index - 1]
+              const next = activeChat.messages[index + 1]
+              const startsGroup = !previous || previous.mine !== message.mine
+              const endsGroup = !next || next.mine !== message.mine
+              return (
+              <div key={message.id} className={`message-line ${message.mine ? 'mine' : ''} ${endsGroup ? 'group-end' : ''}`}>
+                {!message.mine && (endsGroup
+                  ? <Avatar initials={activeChat.initials} color={activeChat.color} size="small" />
+                  : <span className="avatar-spacer" />)}
                 <div className="message-column">
-                  {index === 0 && !message.mine && <span className="message-author">{activeChat.name.split(' ')[0]}</span>}
+                  {startsGroup && !message.mine && <span className="message-author">{activeChat.name.split(' ')[0]}</span>}
                   <div className={`message-bubble ${message.mine ? 'sent' : 'received'}`}>
                     {message.reply && <div className="reply-quote">{message.reply}</div>}
                     <span>{message.text}</span>
@@ -349,7 +498,8 @@ function App() {
                   </div>}
                 </div>
               </div>
-            ))}
+              )
+            })}
             {activeChat?.online && <div className="typing-indicator"><Avatar initials={activeChat.initials} color={activeChat.color} size="small" />
               <div className="typing-bubble"><i /><i /><i /></div><span>{activeChat.name.split(' ')[0]} is here</span></div>}
             <div ref={messagesEnd} />
@@ -375,7 +525,7 @@ function App() {
                 {draft.trim() ? <Send size={17} /> : <Mic size={18} />}
               </button>
             </div>
-            <div className="composer-hint">Press <kbd>Enter</kbd> to send <span>·</span> Conversations stay on this device</div>
+            <div className="composer-hint">Press <kbd>Enter</kbd> to add a message <span>·</span> Sample workspace, not delivered to contacts</div>
           </div>
         </section>
 
@@ -389,7 +539,7 @@ function App() {
             <button onClick={() => notify('No saved messages yet')}><Bookmark size={17} /> Saved messages <ChevronRight size={16} /></button>
             <button onClick={() => notify('No shared notes yet')}><CalendarDays size={17} /> Shared notes <ChevronRight size={16} /></button>
           </div>
-          <button className="privacy-note" onClick={() => notify('This local demo does not use a messaging server')}><LockKeyhole size={16} /><span><b>Private by design</b><small>Your demo chats stay in this browser.</small></span><ChevronRight size={15} /></button>
+          <button className="privacy-note" onClick={() => notify('Accounts use the server. Sample conversations are not yet sent between users.')}><Info size={16} /><span><b>About conversations</b><small>Sample messages are not delivered.</small></span><ChevronRight size={15} /></button>
         </aside>}
       </div>
 
@@ -422,7 +572,7 @@ function App() {
         {navItems.map(({ id, icon: Icon }) => <button key={id} className={activeTab === id ? 'active' : ''}
           aria-label={id} onClick={() => { setActiveTab(id); setMobileChatOpen(false) }}><Icon size={19} /><span>{id}</span></button>)}
       </div>
-      <button className="theme-toggle" aria-label={`Appearance: ${themePref}. Tap to change`} title="Change appearance" onClick={cycleTheme}>
+      <button className="theme-toggle" aria-label={`Appearance: ${themePref}. Tap to change`} title="Change appearance" onClick={onToggleTheme}>
         {themePref === 'dark' ? <Sparkles size={16} /> : themePref === 'light' ? <Zap size={16} /> : <ChevronDown size={16} />}
       </button>
       <div className="theme-label">{themePref.toUpperCase()}</div>
@@ -441,11 +591,13 @@ function ChatRow({ chat, active, onClick }: { chat: Chat; active: boolean; onCli
   )
 }
 
-function SectionList({ tab, onSelect, themePref, onToggleTheme }: {
+function SectionList({ tab, onSelect, themePref, onToggleTheme, user, onLogout }: {
   tab: string
   onSelect: (message: string) => void
   themePref: 'system' | 'light' | 'dark'
   onToggleTheme: () => void
+  user: Account
+  onLogout: () => void
 }) {
   const [activeFilter, setActiveFilter] = useState('All')
   const callHistory = [
@@ -493,7 +645,7 @@ function SectionList({ tab, onSelect, themePref, onToggleTheme }: {
   return (
     <div className="section-content profile-section">
       <div className="profile-cover"><span className="cover-orb" /><button aria-label="Edit profile accent" onClick={() => onSelect('Profile accent customization is coming soon')}><Settings2 size={16} /></button></div>
-      <div className="profile-info"><Avatar initials="JD" color="lavender" size="large" /><h2>Jordan Davis</h2><p>@jordandavis</p><span>Here for the little moments ✨</span></div>
+      <div className="profile-info"><Avatar initials={initialsOf(user.name)} color="lavender" size="large" /><h2>{user.name}</h2><p>@{user.username}</p><span>{user.email}</span></div>
       <button className="settings-row" onClick={onToggleTheme}>
         <span className="setting-icon">{themePref === 'dark' ? <Sparkles size={17} /> : themePref === 'light' ? <Zap size={17} /> : <Settings2 size={17} />}</span>
         <span><b>Appearance</b><small>{themePref === 'system' ? 'Following your device' : themePref === 'dark' ? 'Dark' : 'Light'}</small></span>
@@ -507,8 +659,9 @@ function SectionList({ tab, onSelect, themePref, onToggleTheme }: {
       ].map(([Icon, title, caption]) => <button className="settings-row" key={title as string} onClick={() => onSelect(`${title as string} settings are coming soon`)}>
         <span className="setting-icon"><Icon size={17} /></span><span><b>{title as string}</b><small>{caption as string}</small></span><ChevronRight size={16} />
       </button>)}
+      <button className="settings-row logout-row" onClick={onLogout}>
+        <span className="setting-icon logout-icon"><LogOut size={17} /></span><span><b>Log out</b><small>Sign out of this device</small></span>
+      </button>
     </div>
   )
 }
-
-export default App

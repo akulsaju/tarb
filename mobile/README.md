@@ -9,13 +9,13 @@ npm install
 npx expo start
 ```
 
-Scan the QR code with Expo Go (phone and computer on the same Wi-Fi). The app automatically matches your device dark/light appearance.
+Scan the QR code with Expo Go (phone and computer on the same Wi-Fi). The app opens the live site in dark mode with the server-backed sign-up/sign-in screen.
 
 ## What's wired up
 
 - **OTA updates (`expo-updates`)**: on launch the app checks for a published update, downloads it, and offers a one-tap restart banner.
 - **Notifications (`expo-notifications`)**: requests permission on first launch and schedules a local welcome notification. Android 13+ permission is declared.
-- **Appearance sync**: the device color scheme is passed to the web app (`?theme=dark|light`) so the native shell and web UI match.
+- **Dark entry**: the shell loads `?theme=dark` and uses dark native loading/error screens and a light status bar. The web app offers registration and sign-in on each fresh page load.
 
 ## Enabling remote updates and push notifications (needs your Expo account)
 

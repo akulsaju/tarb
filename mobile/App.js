@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  ActivityIndicator, StyleSheet, Text, TouchableOpacity, useColorScheme, View,
+  ActivityIndicator, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native'
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
 import { WebView } from 'react-native-webview'
@@ -21,8 +21,7 @@ Notifications.setNotificationHandler({
 
 export default function App() {
   const webView = useRef(null)
-  const scheme = useColorScheme()
-  const dark = scheme === 'dark'
+  const dark = true
   const [failed, setFailed] = useState(false)
   const [update, setUpdate] = useState(null) // 'checking' | 'downloading' | 'ready' | null
 
