@@ -7,7 +7,8 @@
     "zod": "^4.6.6"
   },
   "scripts": {
-    "test": "node --test server/auth.test.mjs",
+    "test": "node --test server/auth.test.mjs server/messages.test.mjs",
+    "test:blob": "node --test server/blob.integration.test.mjs",
     "dev": "vite --host 0.0.0.0",
     "build": "tsc -b && vite build",
     "preview": "vite preview --host 0.0.0.0"

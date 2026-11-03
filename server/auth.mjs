@@ -86,8 +86,11 @@ export function createAuthHandler(store) {
       }
 
       const token = randomBytes(32).toString('hex')
+      if (sessionToken && /^[a-f0-9]{64}$/.test(sessionToken)) {
+        await store.remove(`sessions/${digest(sessionToken)}.json`)
+      }
       await store.write(`sessions/${digest(token)}.json`, {
-        userId: account.id, expiresAt: Date.now() + SESSION_MS,
+        userId: account.id, accountKey, expiresAt: Date.now() + SESSION_MS,
       })
       res.setHeader('Set-Cookie', `${COOKIE}=${token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${SESSION_MS / 1000}`)
       return res.status(200).json({ user: publicAccount(account) })

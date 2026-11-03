@@ -21,7 +21,7 @@
 }
 
 * { box-sizing: border-box; }
-body { margin: 0; min-width: 350px; min-height: 100vh; }
+body { margin: 0; min-width: 320px; min-height: 100vh; }
 button, input { font: inherit; }
 button { cursor: pointer; }
 .app-shell { min-height: 100vh; padding: 34px 3.2vw; display: grid; place-items: center; position: relative; overflow: hidden; overflow: clip; overscroll-behavior: none; background: radial-gradient(ellipse at 5% 2%, #fcfbff 0, #f8f8fc 32%, transparent 58%), linear-gradient(140deg, #f1f3f9, #f8f9fc 52%, #f1f5fb); transition: background .3s ease, color .3s ease; }
@@ -443,4 +443,50 @@ button:focus-visible, [role="button"]:focus-visible, input:focus-visible {
   .mobile-tabs { bottom: calc(10px + env(safe-area-inset-bottom)); height: 64px; }
   .mobile-tabs button { height: 51px; gap: 4px; }
   .chat-row { height: 76px; }
+}
+
+.connection-label { color: var(--muted); font-size: 11px; }
+.service-error { color: #b64758; background: rgba(209,70,95,.08); border: 1px solid rgba(209,70,95,.25); border-radius: 12px; padding: 12px; margin: 8px 0; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.dark .service-error { color: #ffbcc9; }
+.service-error button { color: inherit; background: transparent; border: 0; text-decoration: underline; padding: 6px 12px; }
+.real-empty, .conversation-welcome { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 28px 14px; color: var(--muted); }
+.real-empty h3, .conversation-welcome h2 { color: var(--ink); font-family: Manrope, sans-serif; line-height: 1.4; }
+.real-empty h3 { font-size: 17px; margin: 18px 0 4px; }
+.real-empty p, .conversation-welcome p { font-size: 14px; line-height: 1.7; max-width: 310px; }
+.conversation-welcome { height: 100%; }
+.conversation-welcome .brand-mark { width: 70px; height: 70px; border-radius: 24px; font-size: 38px; margin-bottom: 20px; }
+.conversation-welcome .outline-action { width: auto; gap: 8px; padding: 14px 22px; }
+.contact-instructions { color: var(--muted); font-size: 14px; line-height: 1.7; }
+.new-chat .auth-submit { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 20px; }
+.profile-section .profile-info { margin: 20px 0; }
+.profile-info > span:not(.avatar) { font-size: 13px; overflow-wrap: anywhere; }
+.profile-info > .avatar { color: #514579; font-size: 15px; }
+.account-note { display: flex; gap: 10px; align-items: flex-start; color: var(--muted); margin: 18px 0; font-size: 13px; line-height: 1.7; }
+.account-note svg { flex: 0 0 auto; margin-top: 4px; }
+.account-note p { margin: 0; }
+.settings-row, .dark .settings-row { color: var(--ink); }
+.message-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.message-date { text-align: center; color: var(--muted); font-size: 11px; margin: 12px 0 20px; }
+.message-line.mine { margin-left: auto; }
+.message-scroll > div { flex-shrink: 0; }
+.message-bubble .reply-quote { max-height: 90px; overflow: auto; overflow-wrap: anywhere; }
+.message-line .avatar { width: 28px; height: 28px; border-radius: 10px; font-size: 10px; align-self: flex-end; }
+button:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+button:focus-visible { outline: 2px solid #aa9dff; outline-offset: 3px; }
+.message-tools button { min-width: 36px; min-height: 32px; }
+.conversation .message-scroll { padding-top: 24px; }
+.app-shell.dark { background: radial-gradient(ellipse at 10% 0, #29243f, transparent 48%), linear-gradient(140deg, #121420, #1d2032 55%, #151b29); }
+.dark .message-tools button { background: rgba(96,88,139,.25); color: #bcb3df; }
+.dark .rail-button.selected { background: rgba(132,110,220,.2); color: #c6b7ff; }
+.dark .reply-quote { color: #c0b3f2; }
+.dark .sent .reply-quote { color: #f3efff; }
+.dark .message-bubble.sent .message-time { color: rgba(255,255,255,.8); }
+@media (max-width: 790px) {
+  .message-tools button { min-width: 44px; min-height: 36px; }
+  .message-column { max-width: calc(100vw - 90px); }
+  .sidebar { padding-bottom: calc(90px + env(safe-area-inset-bottom)); }
+  .new-chat input { font-size: 16px; }
+  .composer-input input { font-size: 16px; }
+  .message-bubble { font-size: 14px; }
+  .mobile-tabs { max-width: 330px; }
 }
