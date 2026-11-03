@@ -9,7 +9,7 @@ npm install
 npm run dev
 ```
 
-`npm run build` runs the TypeScript check and creates a production bundle in `dist/`. `npm test` checks authentication, conversation access controls, persistence, concurrent sends, idempotent retries, replies, reactions and read positions.
+`npm run build` runs the TypeScript check and creates a production bundle in `dist/`. `npm test` checks authentication, conversation access controls, persistence, concurrent sends, idempotent retries, replies, reactions, read positions, profile edits, status audiences and 24-hour expiry.
 
 ## Accounts and deployment
 
@@ -34,10 +34,21 @@ The app polls every four seconds while visible and resumes when the page becomes
 
 With the private store token set in your shell, `npm run test:blob` runs an opt-in storage integration check (creating and deleting one random `verification/` record). For a linked local project you can use `node --env-file=.env.local --test server/blob.integration.test.mjs`. It verifies large-record conditional writes: reads request identity encoding because compressed Blob responses expose weak ETags, which cannot be used for `ifMatch`.
 
+## Profile and status
+
+The navigation is organized into **Chats**, **Status** and **Profile**. Profile separates identity, account details, appearance, privacy/data and sign-out.
+
+- **Edit profile & photo** changes your display name, profile status (up to 140 characters) and photo. Choose JPEG, PNG or WebP up to 10 MB; the browser center-crops and re-encodes it as a 256px JPEG, removing original metadata. You can remove the photo and return to initials. Changes only take effect after **Save profile** succeeds. Email and display handle remain unchanged.
+- Profile records are stored privately in `profiles/{accountId}.json`. The messaging sync returns current profiles only for the signed-in user and people sharing a conversation, so names/photos/status messages stay consistent in chat lists and headers. Tap a conversation header to view the contact's profile. Version checks prevent silently overwriting edits from another device.
+- **Status** publishes text-only posts with three background choices, up to 700 characters and 10 active posts. Each expires 24 hours after the server accepts it. Your current conversation contacts can view it (including a new contact added during those 24 hours); there is no public feed or individual audience selector. Posts are not read receipts or presence indicators.
+- You can view and delete your own posts with confirmation. Deletion only acts on the authenticated user's records. Expired/deleted posts are omitted by the server, and the UI also hides locally expired posts between syncs using server-adjusted time. Expiry means removal from view, not guaranteed physical deletion: expired records are pruned on the owner's next status mutation; a retention job is still needed for automatic storage erasure.
+
+Photo data is included in private profile JSON, not served through public upload URLs. Sync currently transfers profile photos along with history, so this is deliberately a small-scale implementation. Status image/video uploads and viewer lists are not implemented.
+
 ## Current limits
 
 This is a small-scale messaging implementation, not a production-scale chat service. Each account is limited to 100 conversations and each conversation to 1,000 messages (an explicit error is shown at the limit). Mutations are limited to 60 per minute per account. Blob storage is not a transactional database: inbox registration uses independent conditional writes, and retrying conversation creation repairs a partial inbox registration. Sync currently reads the full conversation history; a database with indexed membership and cursor pagination is needed before scaling.
 
-Messages are **not end-to-end encrypted**. Email ownership verification, password reset, blocking/reporting, account deletion, file uploads, groups, voice/video calls, push notifications and background delivery are not implemented. Unsupported navigation sections were removed rather than populated with fake activity. The attachment control explicitly says uploads are unavailable. Expired session and rate-limit records need a retention/cleanup job before sustained production use.
+Messages are **not end-to-end encrypted**. Email ownership verification, password reset, blocking/reporting, account deletion, message attachments, groups, voice/video calls, push notifications and background delivery are not implemented. Unsupported navigation sections were removed rather than populated with fake activity. The attachment control explicitly says message uploads are unavailable; profile photo saving is implemented separately. Expired session and rate-limit records need a retention/cleanup job before sustained production use.
 
 The Expo wrapper loads the deployed site; EAS update/push setup limitations are documented in `mobile/README.md`. API tests use an in-memory adapter; deployment also requires live two-account verification against the private Blob store.

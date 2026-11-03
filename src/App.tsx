@@ -1,40 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   ArrowLeft, AtSign, Check, ChevronRight, Eye, EyeOff, Info, Lock, LogOut,
-  Mail, MessageCircle, Paperclip, Plus, Search, Send, Settings2, Smile, Sparkles, UserRound, X,
+  Mail, MessageCircle, Paperclip, Plus, Search, Send, Settings2, Smile, UserRound, X, CircleDot,
 } from 'lucide-react'
+import { Account, Profile, StatusPost, Message, Chat, ApiError, Avatar, request, errorText } from './api'
+import { ProfilePanel, StatusPanel } from './ProfileStatus'
 
-type Account = { id: string; name: string; username: string; email: string }
-type Member = Pick<Account, 'id' | 'name' | 'username'>
-type Message = {
-  id: string; senderId: string; text: string; createdAt: string; replyId?: string
-  reactions: Record<string, string>
-}
-type Chat = { id: string; version: number; members: Member[]; messages: Message[]; read: Record<string, number> }
-type Result = { user?: Account; chats?: Chat[]; chat?: Chat; error?: string }
-class ApiError extends Error {
-  constructor(message: string, public status: number) { super(message) }
-}
-async function request(endpoint: 'auth' | 'messages', body: Record<string, string>): Promise<Result> {
-  const response = await fetch(`/api/${endpoint}`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    credentials: 'same-origin', cache: 'no-store', body: JSON.stringify(body),
-    signal: AbortSignal.timeout(25000),
-  })
-  if (!response.headers.get('content-type')?.includes('application/json')) {
-    throw new Error('The server is unavailable. Please try again.')
-  }
-  const result: Result = await response.json()
-  if (!response.ok) throw new ApiError(result.error || 'Unable to complete this request.', response.status)
-  return result
-}
-const errorText = (error: unknown) => error instanceof Error ? error.message : 'Unable to connect. Please try again.'
-const initials = (name: string) => name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('')
 const time = (date: string) => new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 const latestMessage = (chat: Chat) => chat.messages[chat.messages.length - 1]
-function Avatar({ name }: { name: string }) {
-  return <span className="avatar avatar-violet">{initials(name)}</span>
-}
 
 function AuthScreen({ onAuth }: { onAuth: (user: Account) => void }) {
   const [signup, setSignup] = useState(false)
@@ -103,7 +76,12 @@ export default function App() {
 function Workspace({ user, onLogout, onExpired }: { user: Account; onLogout: () => void; onExpired: () => void }) {
   const [chats, setChats] = useState<Chat[]>([])
   const [activeId, setActiveId] = useState('')
-  const [tab, setTab] = useState<'Chats' | 'Profile'>('Chats')
+  const [tab, setTab] = useState<'Chats' | 'Status' | 'Profile'>('Chats')
+  const [profiles, setProfiles] = useState<Profile[]>([])
+  const [statuses, setStatuses] = useState<StatusPost[]>([])
+  const [clock, setClock] = useState(Date.now())
+  const clockOffset = useRef(0)
+  const [showContact, setShowContact] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [unreadOnly, setUnreadOnly] = useState(false)
@@ -126,7 +104,11 @@ function Workspace({ user, onLogout, onExpired }: { user: Account; onLogout: () 
   const syncing = useRef(false)
   const pendingMessage = useRef<{ chatId: string; text: string; replyId?: string; id: string } | null>(null)
   const active = chats.find((chat) => chat.id === activeId)
-  const peer = (chat: Chat) => chat.members.find((member) => member.id !== user.id)!
+  const ownProfile = profiles.find((profile) => profile.id === user.id) || { ...user, photo: '', about: '', version: 0 }
+  const peer = (chat: Chat) => {
+    const person = chat.members.find((member) => member.id !== user.id)!
+    return profiles.find((profile) => profile.id === person.id) || { ...person, photo: '', about: '', version: 0 }
+  }
   const unread = (chat: Chat) => chat.messages.filter((message, index) => index >= (chat.read[user.id] || 0) && message.senderId !== user.id).length
   const draft = drafts[activeId] || ''
 
@@ -148,14 +130,29 @@ function Workspace({ user, onLogout, onExpired }: { user: Account; onLogout: () 
       const result = await request('messages', { action: 'sync' })
       if (!result.chats) throw new Error('Invalid conversation response.')
       const received = result.chats
-      if (version === revision.current) setChats((current) => received.map((chat) => {
-        const existing = current.find((item) => item.id === chat.id)
-        return existing && existing.version > chat.version ? existing : chat
-      }))
+      if (version === revision.current) {
+        setChats((current) => received.map((chat) => {
+          const existing = current.find((item) => item.id === chat.id)
+          return existing && existing.version > chat.version ? existing : chat
+        }))
+        setProfiles((current) => (result.profiles || []).map((profile) => {
+          const existing = current.find((item) => item.id === profile.id)
+          return existing && existing.version > profile.version ? existing : profile
+        }))
+        setStatuses(result.statuses || [])
+      }
+      if (result.serverTime) {
+        clockOffset.current = result.serverTime - Date.now()
+        setClock(result.serverTime)
+      }
       setLoaded(true); setSyncError('')
     } catch (error) { setSyncError(failure(error)) }
     finally { syncing.current = false }
   }
+  useEffect(() => {
+    const timer = setInterval(() => setClock(Date.now() + clockOffset.current), 15000)
+    return () => clearInterval(timer)
+  }, [])
   useEffect(() => {
     let disposed = false
     let timer: ReturnType<typeof setTimeout>
@@ -173,7 +170,7 @@ function Workspace({ user, onLogout, onExpired }: { user: Account; onLogout: () 
   const lastId = active && latestMessage(active)?.id
   useEffect(() => {
     atBottom.current = true
-    setReply(null); setEmoji(false); setActionError('')
+    setReply(null); setEmoji(false); setActionError(''); setShowContact(false)
     if (scroll.current) scroll.current.scrollTop = scroll.current.scrollHeight
   }, [activeId])
   useEffect(() => {
@@ -240,7 +237,7 @@ function Workspace({ user, onLogout, onExpired }: { user: Account; onLogout: () 
   const visible = chats.filter((chat) => (!unreadOnly || unread(chat) > 0) &&
     `${peer(chat).name} ${peer(chat).username} ${chat.messages.map((message) => message.text).join(' ')}`.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => (latestMessage(b)?.createdAt || '').localeCompare(latestMessage(a)?.createdAt || ''))
-  const nav = [{ id: 'Chats', icon: MessageCircle }, { id: 'Profile', icon: Settings2 }] as const
+  const nav = [{ id: 'Chats', icon: MessageCircle }, { id: 'Status', icon: CircleDot }, { id: 'Profile', icon: Settings2 }] as const
 
   return <main className={`app-shell ${dark ? 'dark' : ''}`}>
     <div className="ambient ambient-one" /><div className="ambient ambient-two" />
@@ -249,11 +246,11 @@ function Workspace({ user, onLogout, onExpired }: { user: Account; onLogout: () 
         <button className="brand-mark" aria-label="VYBE home" onClick={() => { setTab('Chats'); setMobileOpen(false) }}>v.</button>
         <nav className="rail-nav">{nav.map(({ id, icon: Icon }) => <button key={id} className={`rail-button ${tab === id ? 'selected' : ''}`}
           aria-label={id} onClick={() => { setTab(id); setMobileOpen(false) }}><Icon size={20} /></button>)}</nav>
-        <button className="profile-button rail-bottom" aria-label="Your profile" onClick={() => { setTab('Profile'); setMobileOpen(false) }}><Avatar name={user.name} /></button>
+        <button className="profile-button rail-bottom" aria-label="Your profile" onClick={() => { setTab('Profile'); setMobileOpen(false) }}><Avatar name={ownProfile.name} photo={ownProfile.photo} /></button>
       </aside>
       <section className="sidebar glass">
         <div className="sidebar-topline"><span className="eyebrow">YOUR SPACE</span><span className="connection-label">{syncError ? 'Reconnecting' : loaded ? 'Server connected' : 'Connecting…'}</span></div>
-        <div className="sidebar-heading"><div><h1>{tab === 'Chats' ? 'Messages' : 'Your profile'}</h1><p>Good conversations live here.</p></div>
+        <div className="sidebar-heading"><div><h1>{tab === 'Chats' ? 'Messages' : tab === 'Status' ? 'Status' : 'Your profile'}</h1><p>{tab === 'Status' ? 'Little moments, for 24 hours.' : 'Good conversations live here.'}</p></div>
           <button className="round-button compose" aria-label="New conversation" onClick={() => { setNewChat(true); setActionError('') }}><Plus size={20} /></button></div>
         {tab === 'Chats' ? <>
           <label className="search-field"><Search size={17} /><input aria-label="Search conversations" placeholder="Search conversations" value={search} onChange={(e) => setSearch(e.target.value)} /></label>
@@ -265,7 +262,7 @@ function Workspace({ user, onLogout, onExpired }: { user: Account; onLogout: () 
             {visible.map((chat) => {
               const person = peer(chat), latest = latestMessage(chat), count = unread(chat)
               return <button key={chat.id} className={`chat-row ${activeId === chat.id ? 'active' : ''}`} onClick={() => { setActiveId(chat.id); setMobileOpen(true) }}>
-                <Avatar name={person.name} /><span className="chat-row-body"><span className="chat-row-name">{person.name}</span><span className="chat-preview">{latest?.text || 'Say hello'}</span></span>
+                <Avatar name={person.name} photo={person.photo} /><span className="chat-row-body"><span className="chat-row-name">{person.name}</span><span className="chat-preview">{latest?.text || person.about || 'Say hello'}</span></span>
                 <span className="chat-row-meta"><span>{latest ? time(latest.createdAt) : ''}</span>{count > 0 && <b>{count}</b>}</span>
               </button>
             })}
@@ -274,23 +271,28 @@ function Workspace({ user, onLogout, onExpired }: { user: Account; onLogout: () 
               {!chats.length && <button className="outline-action" onClick={() => setNewChat(true)}><Plus size={16} /> New conversation</button>}</div>}
           </div>
           <div className="sidebar-footer">Synced every 4 seconds while open</div>
-        </> : <div className="section-content profile-section">
-          <div className="profile-info"><Avatar name={user.name} /><h2>{user.name}</h2><p>@{user.username}</p><span>{user.email}</span></div>
-          <button className="settings-row" onClick={() => setDark(!dark)}><Sparkles size={18} /><span><b>Appearance</b><small>{dark ? 'Dark' : 'Light'} · Tap to change</small></span></button>
-          <div className="account-note"><Info size={18} /><p>Share your email with friends so they can message you. Messages are stored on our server. End-to-end encryption, calls, uploads and push notifications are not available.</p></div>
-          <button className="settings-row logout-row" disabled={loggingOut} onClick={() => void logout()}><LogOut size={18} /><span>{loggingOut ? 'Signing out…' : 'Sign out'}</span></button>
-          {actionError && <p className="service-error" role="alert">{actionError}</p>}
-        </div>}
+        </> : tab === 'Status' ? <StatusPanel userId={user.id} dark={dark} profiles={[ownProfile, ...profiles.filter((profile) => profile.id !== user.id)]}
+          posts={statuses.filter((post) => post.expiresAt > clock)} now={clock} onError={failure}
+          onMutate={() => { revision.current++ }} onChanged={(posts) => {
+            revision.current++; setStatuses((current) => [...current.filter((post) => post.userId !== user.id), ...posts])
+          }} /> : <ProfilePanel profile={ownProfile} email={user.email} loaded={loaded} dark={dark} onTheme={() => setDark(!dark)}
+            onError={failure} onMutate={() => { revision.current++ }} onSaved={(profile) => {
+              revision.current++; setProfiles((current) => [...current.filter((item) => item.id !== user.id), profile])
+            }} />}
+        {tab !== 'Chats' && syncError && <div className="service-error" role="alert">{syncError}<button onClick={() => void sync()}>Retry</button></div>}
+        {tab === 'Profile' && <div className="profile-session"><button className="settings-row logout-row" disabled={loggingOut} onClick={() => void logout()}><LogOut size={18} /><span>{loggingOut ? 'Signing out…' : 'Sign out'}</span></button>
+          {actionError && <p className="service-error" role="alert">{actionError}</p>}</div>}
       </section>
       <section className="conversation glass">
-        {active ? <>
+        {tab !== 'Chats' ? <div className="conversation-welcome"><div className="feature-mark">{tab === 'Status' ? <CircleDot size={36} /> : <UserRound size={36} />}</div>
+          <h2>{tab === 'Status' ? 'A moment worth sharing.' : 'Make this space yours.'}</h2><p>{tab === 'Status' ? 'Share a text update with your conversation contacts. Posts disappear from view after 24 hours.' : 'Change your photo, name and profile status. Your contacts see the latest version across VYBE.'}</p></div> : active ? <>
           <header className="chat-header">
-            <div className="chat-person"><Avatar name={peer(active).name} /><div><h2>{peer(active).name}</h2><p>@{peer(active).username} · VYBE member</p></div></div>
+            <button className="chat-person contact-heading" aria-label="View contact profile" onClick={() => setShowContact(true)}><Avatar name={peer(active).name} photo={peer(active).photo} /><span><h2>{peer(active).name}</h2><span className="contact-subtitle">{peer(active).about || `@${peer(active).username}`}</span></span></button>
             <div className="header-actions"><button className="icon-button" aria-label="Conversation information" onClick={() => setToast('Stored on the VYBE server. Not end-to-end encrypted. Updates checked every 4 seconds.')}><Info size={20} /></button>
               <button className="icon-button mobile-back" aria-label="Back to conversations" onClick={() => setMobileOpen(false)}><ArrowLeft size={20} /></button></div>
           </header>
           <div className="message-scroll" ref={scroll} onScroll={() => { const node = scroll.current; if (node) atBottom.current = node.scrollHeight - node.scrollTop - node.clientHeight < 100 }}>
-            {!active.messages.length && <div className="real-empty"><Avatar name={peer(active).name} /><h3>Say hello to {peer(active).name}</h3><p>Your messages will appear on both accounts.</p></div>}
+            {!active.messages.length && <div className="real-empty"><Avatar name={peer(active).name} photo={peer(active).photo} /><h3>Say hello to {peer(active).name}</h3><p>Your messages will appear on both accounts.</p></div>}
             {active.messages.map((message, index) => {
               const mine = message.senderId === user.id
               const quote = active.messages.find((item) => item.id === message.replyId)
@@ -299,7 +301,7 @@ function Workspace({ user, onLogout, onExpired }: { user: Account; onLogout: () 
               return <div key={message.id}>
                 {showDate && <div className="message-date">{new Date(message.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</div>}
                 <div className={`message-line ${mine ? 'mine' : ''} group-end`}>
-                  {!mine && <Avatar name={peer(active).name} />}
+                  {!mine && <Avatar name={peer(active).name} photo={peer(active).photo} />}
                   <div className="message-column">
                     <div className={`message-bubble ${mine ? 'sent' : 'received'}`}>
                       {quote && <div className="reply-quote">{quote.text}</div>}<span className="message-text">{message.text}</span>
@@ -343,6 +345,14 @@ function Workspace({ user, onLogout, onExpired }: { user: Account; onLogout: () 
           value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} /></label>
           {actionError && <p className="service-error" role="alert">{actionError}</p>}
           <button className="auth-submit" disabled={starting}>{starting ? 'Opening…' : 'Start conversation'}<ChevronRight size={17} /></button></form>
+      </section>
+    </div>}
+    {showContact && active && <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setShowContact(false) }}>
+      <section className="new-chat glass" role="dialog" aria-modal="true" aria-labelledby="contact-profile-title">
+        <div className="modal-head"><h2 id="contact-profile-title">Contact profile</h2><button className="icon-button" aria-label="Close contact profile" onClick={() => setShowContact(false)}><X size={20} /></button></div>
+        <div className="profile-info"><Avatar name={peer(active).name} photo={peer(active).photo} /><h2>{peer(active).name}</h2><p>@{peer(active).username}</p></div>
+        <div className="profile-group"><h3>Profile status</h3><p className="about-text">{peer(active).about || 'No profile status yet.'}</p></div>
+        <p className="contact-instructions">Connected through your private conversation.</p>
       </section>
     </div>}
     {toast && <div className="toast" role="status">{toast}</div>}

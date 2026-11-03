@@ -2,6 +2,10 @@ import { createHash } from 'node:crypto'
 
 const digest = (value) => createHash('sha256').update(value).digest('hex')
 const member = ({ id, name, username }) => ({ id, name, username })
+const profileOf = (account, profile) => ({
+  ...member(account), about: '', photo: '', version: 0, ...profile,
+})
+const DAY = 24 * 60 * 60 * 1000
 const validId = (id) => typeof id === 'string' && /^[a-f0-9]{64}$/.test(id)
 class HttpError extends Error {
   constructor(status, message) { super(message); this.status = status }
@@ -33,9 +37,11 @@ export function createMessagingHandler(store) {
       if (req.method !== 'POST') throw new HttpError(405, 'Use POST for messaging.')
       if (req.headers.origin !== `https://${req.headers.host}`) throw new HttpError(403, 'Request origin is not allowed.')
       if (!req.headers['content-type']?.startsWith('application/json')) throw new HttpError(415, 'Send JSON content.')
-      if (Number(req.headers['content-length'] || 0) > 16384) throw new HttpError(413, 'Request is too large.')
+      if (Number(req.headers['content-length'] || 0) > 300000) throw new HttpError(413, 'Request is too large.')
       const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body
-      if (!body || JSON.stringify(body).length > 16384) throw new HttpError(400, 'Invalid request.')
+      if (!body || typeof body !== 'object' || Array.isArray(body)) throw new HttpError(400, 'Invalid request.')
+      const maxBody = body.action === 'profile-save' ? 300000 : 16384
+      if (JSON.stringify(body).length > maxBody || Number(req.headers['content-length'] || 0) > maxBody) throw new HttpError(413, 'Request is too large.')
       const token = req.headers.cookie?.split(';').map((part) => part.trim())
         .find((part) => part.startsWith('__Host-vybe-session='))?.slice('__Host-vybe-session='.length)
       if (!validId(token)) throw new HttpError(401, 'Please sign in again.')
@@ -46,6 +52,8 @@ export function createMessagingHandler(store) {
       if (!account || account.id !== session.userId) throw new HttpError(401, 'Please sign in again.')
       const inboxKey = (id) => `inboxes/${id}.json`
       const conversationKey = (id) => `conversations/${id}.json`
+      const profileKey = (id) => `profiles/${id}.json`
+      const statusKey = (id) => `statuses/${id}.json`
 
       if (body.action === 'sync') {
         const inbox = (await store.read(inboxKey(account.id)))?.value || []
@@ -54,10 +62,17 @@ export function createMessagingHandler(store) {
           if (!conversation?.members.some((item) => item.id === account.id)) return null
           return conversation
         }))).filter(Boolean)
-        return res.status(200).json({ chats })
+        const contacts = new Map([[account.id, member(account)]])
+        for (const chat of chats) for (const person of chat.members) contacts.set(person.id, person)
+        const profiles = await Promise.all([...contacts.values()].map(async (person) =>
+          profileOf(person, (await store.read(profileKey(person.id)))?.value)))
+        const now = Date.now()
+        const statuses = (await Promise.all([...contacts.keys()].map(async (id) =>
+          ((await store.read(statusKey(id)))?.value || []).filter((post) => post.expiresAt > now)))).flat()
+        return res.status(200).json({ chats, profiles, statuses, serverTime: now })
       }
 
-      if (!['start', 'send', 'read', 'react'].includes(body.action)) throw new HttpError(400, 'Unknown messaging action.')
+      if (!['start', 'send', 'read', 'react', 'profile-save', 'status-post', 'status-delete'].includes(body.action)) throw new HttpError(400, 'Unknown messaging action.')
       // Bound mutations per account independently of browser-supplied network headers.
       if (body.action !== 'read') {
         const rateKey = `message-limits/${account.id}-${Math.floor(Date.now() / 60000)}.json`
@@ -65,6 +80,52 @@ export function createMessagingHandler(store) {
           if ((value?.attempts || 0) >= 60) throw new HttpError(429, 'Too many requests. Please wait a minute.')
           return { attempts: (value?.attempts || 0) + 1 }
         })
+      }
+
+      if (body.action === 'profile-save') {
+        const name = typeof body.name === 'string' ? body.name.trim() : ''
+        const about = typeof body.about === 'string' ? body.about.trim() : ''
+        const photo = body.photo
+        if (name.length < 2 || name.length > 80) throw new HttpError(400, 'Use a display name between 2 and 80 characters.')
+        if (typeof body.about !== 'string' || about.length > 140) throw new HttpError(400, 'Profile status must be at most 140 characters.')
+        if (typeof photo !== 'string' || photo.length > 250000) throw new HttpError(400, 'Profile photo is too large. Choose a smaller image.')
+        if (photo) {
+          if (!/^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(photo)) throw new HttpError(400, 'Profile photos must be JPEG images.')
+          const bytes = Buffer.from(photo.slice('data:image/jpeg;base64,'.length), 'base64')
+          if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8 || bytes[bytes.length - 2] !== 0xff || bytes[bytes.length - 1] !== 0xd9) {
+            throw new HttpError(400, 'Invalid JPEG photo.')
+          }
+        }
+        const profile = await update(profileKey(account.id), (value) => {
+          if (!Number.isInteger(body.version) || body.version !== (value?.version || 0)) throw new HttpError(409, 'Your profile changed on another device. Cancel and reopen the editor to load it.')
+          return { ...member(account), name, about, photo, version: (value?.version || 0) + 1 }
+        })
+        return res.status(200).json({ profile })
+      }
+
+      if (body.action === 'status-post') {
+        const text = typeof body.text === 'string' ? body.text.trim() : ''
+        if (!text || text.length > 700) throw new HttpError(400, 'Status posts must contain 1–700 characters.')
+        if (!['violet', 'ocean', 'rose'].includes(body.color)) throw new HttpError(400, 'Choose a supported status color.')
+        if (typeof body.postId !== 'string' || !/^[a-f0-9-]{36}$/.test(body.postId)) throw new HttpError(400, 'Invalid status identifier.')
+        const now = Date.now()
+        const statuses = await update(statusKey(account.id), (value = []) => {
+          const current = value.filter((post) => post.expiresAt > now)
+          const existing = current.find((post) => post.id === body.postId)
+          if (existing) {
+            if (existing.text !== text || existing.color !== body.color) throw new HttpError(409, 'Status identifier already used.')
+            return undefined
+          }
+          if (current.length >= 10) throw new HttpError(409, 'You can have 10 active posts. Delete one or wait for it to expire.')
+          return [...current, { id: body.postId, userId: account.id, text, color: body.color, createdAt: now, expiresAt: now + DAY }]
+        })
+        return res.status(200).json({ statuses: statuses.filter((post) => post.expiresAt > now), serverTime: now })
+      }
+
+      if (body.action === 'status-delete') {
+        if (typeof body.postId !== 'string' || !/^[a-f0-9-]{36}$/.test(body.postId)) throw new HttpError(400, 'Invalid status identifier.')
+        const statuses = await update(statusKey(account.id), (value = []) => value.filter((post) => post.id !== body.postId && post.expiresAt > Date.now()))
+        return res.status(200).json({ statuses, serverTime: Date.now() })
       }
 
       if (body.action === 'start') {

@@ -475,6 +475,77 @@ button:disabled { opacity: .5; cursor: not-allowed; transform: none; }
 button:focus-visible { outline: 2px solid #aa9dff; outline-offset: 3px; }
 .message-tools button { min-width: 36px; min-height: 32px; }
 .conversation .message-scroll { padding-top: 24px; }
+.avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
+.feature-content { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 3px 20px; scrollbar-width: thin; }
+.profile-banner { min-height: 80px; display: flex; align-items: flex-start; justify-content: space-between; padding: 15px; border-radius: 18px; background: linear-gradient(120deg, #6354a5, #347e88); color: #eeeaff; font-size: 10px; letter-spacing: 2px; }
+.profile-section .profile-info { margin: -25px 0 18px; }
+.profile-section .profile-info .avatar, .photo-preview .avatar, .new-chat .profile-info .avatar { width: 84px; height: 84px; border-radius: 28px; font-size: 24px; }
+.profile-group { padding: 18px 4px; border-bottom: 1px solid var(--line); }
+.profile-group h3 { margin: 0 0 14px; color: var(--muted); font-size: 10px; letter-spacing: 1.4px; }
+.profile-group small, .field-hint { display: block; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.profile-info h2 { overflow-wrap: anywhere; max-width: 100%; }
+.profile-info p { font-size: 12px; }
+.dark .outline-action { background: rgba(144,121,229,.13); border-color: rgba(190,171,255,.35); color: #d3c3ff; }
+.profile-group p { font-size: 14px; line-height: 1.6; margin: 6px 0 14px; }
+.about-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.account-email { overflow-wrap: anywhere; }
+.profile-session { padding-top: 10px; border-top: 1px solid var(--line); }
+.profile-editor fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.profile-editor legend { font-weight: 700; font-size: 16px; margin: 12px 0; }
+.profile-editor label { display: flex; flex-direction: column; gap: 8px; margin: 16px 0 6px; font-size: 12px; color: var(--muted); }
+.profile-editor input:not([type=file]), .profile-editor textarea { width: 100%; padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: rgba(120,110,180,.07); color: var(--ink); font: inherit; font-size: 16px; resize: vertical; }
+.photo-preview { display: flex; justify-content: center; padding: 12px; }
+.photo-actions, .editor-actions { display: flex; align-items: center; gap: 10px; }
+.photo-actions { flex-wrap: wrap; }
+.photo-actions .outline-action { margin: 0; flex: 1; min-width: 140px; }
+.text-action { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 0; border-radius: 10px; padding: 12px; background: transparent; color: var(--ink); font-size: 13px; }
+.text-action:hover { background: rgba(132,110,220,.13); }
+.editor-actions { justify-content: space-between; margin: 14px 0; }
+.editor-actions .auth-submit { margin: 0; width: auto; padding: 12px 20px; }
+.status-presets { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.status-presets button { border: 1px solid var(--line); border-radius: 20px; color: var(--ink); background: rgba(132,110,220,.08); padding: 8px 10px; font-size: 12px; }
+.saved-note { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #43bba0; }
+.contact-heading { border: 0; background: transparent; color: inherit; padding: 0; text-align: left; min-width: 0; }
+.contact-heading > span:last-child { min-width: 0; }
+.contact-heading h2 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.contact-subtitle { display: block; max-width: 240px; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 5px; }
+.feature-mark { color: #b7a3ff; border: 1px solid var(--line); border-radius: 28px; padding: 22px; background: rgba(132,110,220,.12); }
+.status-create, .status-list-row { display: flex; align-items: center; gap: 12px; width: 100%; border: 0; border-radius: 16px; padding: 12px 5px; text-align: left; background: transparent; color: var(--ink); }
+.status-create > span:nth-child(2), .status-list-row > span:last-child { flex: 1; min-width: 0; }
+.status-create b, .status-list-row b { display: block; font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.status-create small, .status-list-row small { display: block; margin-top: 5px; color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.status-list-row:hover { background: rgba(132,110,220,.1); }
+.status-avatar { position: relative; }
+.status-avatar i { display: grid; place-items: center; position: absolute; bottom: -3px; right: -3px; width: 22px; height: 22px; border-radius: 9px; background: #8d78e4; color: white; border: 2px solid #252338; }
+.status-audience { display: flex; align-items: flex-start; gap: 8px; color: var(--muted); font-size: 12px; line-height: 1.6; padding: 12px 3px; }
+.status-audience svg { flex: 0 0 auto; margin-top: 3px; }
+.status-violet { background: linear-gradient(150deg, #51408e, #33235f); color: #fff; }
+.status-ocean { background: linear-gradient(150deg, #21586d, #123f4a); color: #fff; }
+.status-rose { background: linear-gradient(150deg, #8b3c65, #572444); color: #fff; }
+.status-swatch { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 14px; flex: 0 0 auto; }
+.status-ring { border: 2px solid #a48df6; padding: 3px; border-radius: 20px; }
+.status-input { width: 100%; border: 1px solid rgba(255,255,255,.2); border-radius: 18px; padding: 24px; resize: vertical; min-height: 180px; font: 600 20px Manrope, sans-serif; line-height: 1.7; margin-top: 18px; }
+.status-input::placeholder { color: #d3cae6; }
+.status-colors { display: flex; align-items: center; gap: 10px; margin: 14px 0; }
+.status-colors button { width: 44px; height: 44px; border: 2px solid transparent; border-radius: 50%; display: grid; place-items: center; }
+.status-colors button[aria-pressed=true] { border-color: #dacbff; }
+.status-colors > span { margin-left: auto; color: var(--muted); font-size: 12px; }
+.status-viewer { width: min(460px, 100%); max-height: 90dvh; overflow-y: auto; border: 1px solid rgba(255,255,255,.2); border-radius: 24px; padding: 22px; box-shadow: 0 24px 80px #0005; }
+.status-viewer header { display: flex; align-items: center; gap: 12px; }
+.status-viewer header > span:nth-child(2) { flex: 1; min-width: 0; }
+.status-viewer header b { overflow-wrap: anywhere; }
+.status-viewer header small { display: block; color: #dfd9ec; margin-top: 4px; font-size: 11px; }
+.status-viewer .icon-button, .status-viewer .text-action { color: white; }
+.status-body { min-height: 170px; display: flex; align-items: center; justify-content: center; white-space: pre-wrap; overflow-wrap: anywhere; padding: 24px 0; font: 600 23px Manrope, sans-serif; line-height: 1.7; }
+.status-viewer footer { border-top: 1px solid #ffffff30; padding-top: 12px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.delete-confirm { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13px; }
+.delete-confirm button { border: 1px solid #ffffff70; border-radius: 10px; color: white; background: #ffffff10; padding: 10px; }
+@media (max-width: 790px) {
+  .status-viewer { margin-bottom: env(safe-area-inset-bottom); border-radius: 24px 24px 0 0; max-height: 92dvh; }
+  .contact-subtitle { max-width: 180px; }
+  .feature-content { padding-bottom: 12px; }
+  .profile-session { flex-shrink: 0; }
+}
 .app-shell.dark { background: radial-gradient(ellipse at 10% 0, #29243f, transparent 48%), linear-gradient(140deg, #121420, #1d2032 55%, #151b29); }
 .dark .message-tools button { background: rgba(96,88,139,.25); color: #bcb3df; }
 .dark .rail-button.selected { background: rgba(132,110,220,.2); color: #c6b7ff; }
