@@ -4,9 +4,9 @@
     "slug": "vybe",
     "version": "1.0.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
     "scheme": "vybe",
-    "backgroundColor": "#f3f5fa",
+    "backgroundColor": "#171927",
     "runtimeVersion": {
       "policy": "appVersion"
     },
@@ -21,12 +21,6 @@
         {
           "style": "auto"
         }
-      ],
-      [
-        "expo-notifications",
-        {
-          "color": "#6d5bd0"
-        }
       ]
     ],
     "ios": {
@@ -34,8 +28,7 @@
       "bundleIdentifier": "com.akulsaju.vybe"
     },
     "android": {
-      "package": "com.akulsaju.vybe",
-      "permissions": ["POST_NOTIFICATIONS"]
+      "package": "com.akulsaju.vybe"
     }
   }
 }

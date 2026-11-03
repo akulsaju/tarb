@@ -1,75 +1,63 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  ActivityIndicator, StyleSheet, Text, TouchableOpacity, View,
+  ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native'
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
 import { WebView } from 'react-native-webview'
 import { StatusBar } from 'expo-status-bar'
-import * as Notifications from 'expo-notifications'
-import * as Updates from 'expo-updates'
+import Constants, { ExecutionEnvironment } from 'expo-constants'
+import { loadNativeUpdates } from './native-runtime.mjs'
 
 const VYBE_URL = 'https://vybe-lac.vercel.app'
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldPlaySound: false,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-})
-
 export default function App() {
   const webView = useRef(null)
+  const updates = useRef(null)
   const dark = true
   const [failed, setFailed] = useState(false)
-  const [update, setUpdate] = useState(null) // 'checking' | 'downloading' | 'ready' | null
+  const [update, setUpdate] = useState(null)
+  const [updateError, setUpdateError] = useState('')
 
   useEffect(() => {
-    registerForNotifications()
-    checkForUpdate()
-  }, [])
-
-  async function registerForNotifications() {
-    try {
-      const { status } = await Notifications.getPermissionsAsync()
-      const final = status === 'granted' ? status : (await Notifications.requestPermissionsAsync()).status
-      if (final === 'granted') {
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: 'Welcome to VYBE',
-            body: 'You will be notified here when something new arrives.',
-          },
-          trigger: { seconds: 6, channelId: 'default' },
+    let active = true
+    async function checkForUpdate() {
+      try {
+        const nativeUpdates = loadNativeUpdates({
+          isExpoGo: Constants.executionEnvironment === ExecutionEnvironment.StoreClient,
+          isDevelopment: __DEV__,
+          load: () => require('expo-updates'),
         })
+        if (!nativeUpdates) return
+        updates.current = nativeUpdates
+        setUpdate('checking')
+        const result = await nativeUpdates.checkForUpdateAsync()
+        if (!active) return
+        if (result.isAvailable) {
+          setUpdate('downloading')
+          await nativeUpdates.fetchUpdateAsync()
+          if (active) setUpdate('ready')
+        } else {
+          setUpdate(null)
+        }
+      } catch (error) {
+        console.warn('VYBE update check failed:', error)
+        if (active) {
+          setUpdate(null)
+          setUpdateError('Could not check for app updates. Messaging is still available.')
+        }
       }
-    } catch {
-      // Notifications unavailable in this environment
     }
-  }
-
-  async function checkForUpdate() {
-    if (!Updates.isEnabled) return
-    try {
-      setUpdate('checking')
-      const result = await Updates.checkForUpdateAsync()
-      if (result.isAvailable) {
-        setUpdate('downloading')
-        await Updates.fetchUpdateAsync()
-        setUpdate('ready')
-      } else {
-        setUpdate(null)
-      }
-    } catch {
-      setUpdate(null)
-    }
-  }
+    void checkForUpdate()
+    return () => { active = false }
+  }, [])
 
   async function applyUpdate() {
     try {
-      await Updates.reloadAsync()
-    } catch {
-      setUpdate(null)
+      if (!updates.current) throw new Error('Native updates are unavailable.')
+      await updates.current.reloadAsync()
+    } catch (error) {
+      console.warn('VYBE update restart failed:', error)
+      Alert.alert('Could not restart VYBE', 'Please close and reopen the app to apply the downloaded update.')
     }
   }
 
@@ -80,6 +68,12 @@ export default function App() {
     <SafeAreaProvider>
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top', 'bottom']}>
         <StatusBar style={dark ? 'light' : 'dark'} />
+        {updateError && <View style={[styles.updateBar, { backgroundColor: theme.accentSoft }]}>
+          <Text style={[styles.updateText, { color: theme.text, flex: 1 }]}>{updateError}</Text>
+          <TouchableOpacity accessibilityLabel="Dismiss update error" onPress={() => setUpdateError('')} style={styles.updateButton}>
+            <Text style={{ color: theme.text }}>Dismiss</Text>
+          </TouchableOpacity>
+        </View>}
         {update === 'ready' && (
           <View style={[styles.updateBar, { backgroundColor: theme.accent }]}>
             <Text style={styles.updateText}>A new version of VYBE is ready</Text>
