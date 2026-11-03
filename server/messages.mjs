@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto'
+import { HttpError, requireAccount } from './session.mjs'
+import { mediaKey, validMediaId } from './status-media.mjs'
 
 const digest = (value) => createHash('sha256').update(value).digest('hex')
 const member = ({ id, name, username }) => ({ id, name, username })
@@ -7,9 +9,6 @@ const profileOf = (account, profile) => ({
 })
 const DAY = 24 * 60 * 60 * 1000
 const validId = (id) => typeof id === 'string' && /^[a-f0-9]{64}$/.test(id)
-class HttpError extends Error {
-  constructor(status, message) { super(message); this.status = status }
-}
 
 export function createMessagingHandler(store) {
   async function update(key, transform) {
@@ -42,14 +41,7 @@ export function createMessagingHandler(store) {
       if (!body || typeof body !== 'object' || Array.isArray(body)) throw new HttpError(400, 'Invalid request.')
       const maxBody = body.action === 'profile-save' ? 300000 : 16384
       if (JSON.stringify(body).length > maxBody || Number(req.headers['content-length'] || 0) > maxBody) throw new HttpError(413, 'Request is too large.')
-      const token = req.headers.cookie?.split(';').map((part) => part.trim())
-        .find((part) => part.startsWith('__Host-vybe-session='))?.slice('__Host-vybe-session='.length)
-      if (!validId(token)) throw new HttpError(401, 'Please sign in again.')
-      const sessionKey = `sessions/${digest(token)}.json`
-      const session = (await store.read(sessionKey))?.value
-      if (!session || session.expiresAt <= Date.now() || !session.accountKey) throw new HttpError(401, 'Your session expired. Please sign in again.')
-      const account = (await store.read(session.accountKey))?.value
-      if (!account || account.id !== session.userId) throw new HttpError(401, 'Please sign in again.')
+      const account = await requireAccount(req, store)
       const inboxKey = (id) => `inboxes/${id}.json`
       const conversationKey = (id) => `conversations/${id}.json`
       const profileKey = (id) => `profiles/${id}.json`
@@ -105,19 +97,28 @@ export function createMessagingHandler(store) {
 
       if (body.action === 'status-post') {
         const text = typeof body.text === 'string' ? body.text.trim() : ''
-        if (!text || text.length > 700) throw new HttpError(400, 'Status posts must contain 1–700 characters.')
+        if ((!text && !body.mediaId) || text.length > 700) throw new HttpError(400, 'Add text or media. Captions must be at most 700 characters.')
         if (!['violet', 'ocean', 'rose'].includes(body.color)) throw new HttpError(400, 'Choose a supported status color.')
         if (typeof body.postId !== 'string' || !/^[a-f0-9-]{36}$/.test(body.postId)) throw new HttpError(400, 'Invalid status identifier.')
         const now = Date.now()
+        let media
+        let mediaExpiresAt = now + DAY
+        if (body.mediaId) {
+          if (!validMediaId(body.mediaId) || body.mediaId !== body.postId) throw new HttpError(400, 'Invalid status media.')
+          const asset = (await store.read(mediaKey(body.mediaId)))?.value
+          if (!asset || asset.userId !== account.id || asset.expiresAt <= now) throw new HttpError(400, 'Your upload has expired or is unavailable. Choose it again.')
+          media = { id: asset.id, kind: asset.kind }
+          mediaExpiresAt = asset.expiresAt
+        }
         const statuses = await update(statusKey(account.id), (value = []) => {
           const current = value.filter((post) => post.expiresAt > now)
           const existing = current.find((post) => post.id === body.postId)
           if (existing) {
-            if (existing.text !== text || existing.color !== body.color) throw new HttpError(409, 'Status identifier already used.')
+            if (existing.text !== text || existing.color !== body.color || existing.media?.id !== media?.id) throw new HttpError(409, 'Status identifier already used.')
             return undefined
           }
           if (current.length >= 10) throw new HttpError(409, 'You can have 10 active posts. Delete one or wait for it to expire.')
-          return [...current, { id: body.postId, userId: account.id, text, color: body.color, createdAt: now, expiresAt: now + DAY }]
+          return [...current, { id: body.postId, userId: account.id, text, color: body.color, createdAt: now, expiresAt: Math.min(now + DAY, mediaExpiresAt), ...(media ? { media } : {}) }]
         })
         return res.status(200).json({ statuses: statuses.filter((post) => post.expiresAt > now), serverTime: now })
       }
@@ -125,6 +126,11 @@ export function createMessagingHandler(store) {
       if (body.action === 'status-delete') {
         if (typeof body.postId !== 'string' || !/^[a-f0-9-]{36}$/.test(body.postId)) throw new HttpError(400, 'Invalid status identifier.')
         const statuses = await update(statusKey(account.id), (value = []) => value.filter((post) => post.id !== body.postId && post.expiresAt > Date.now()))
+        const asset = (await store.read(mediaKey(body.postId)))?.value
+        if (asset?.userId === account.id) {
+          await store.remove(asset.path)
+          await store.remove(mediaKey(body.postId))
+        }
         return res.status(200).json({ statuses, serverTime: Date.now() })
       }
 

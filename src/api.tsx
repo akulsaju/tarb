@@ -1,7 +1,10 @@
 export type Account = { id: string; name: string; username: string; email: string }
 export type Member = Pick<Account, 'id' | 'name' | 'username'>
 export type Profile = Member & { about: string; photo: string; version: number }
-export type StatusPost = { id: string; userId: string; text: string; color: 'violet' | 'ocean' | 'rose'; createdAt: number; expiresAt: number }
+export type StatusPost = {
+  id: string; userId: string; text: string; color: 'violet' | 'ocean' | 'rose'; createdAt: number; expiresAt: number
+  media?: { id: string; kind: 'photo' | 'video' }
+}
 export type Message = {
   id: string; senderId: string; text: string; createdAt: string; replyId?: string
   reactions: Record<string, string>
@@ -28,6 +31,17 @@ export async function request(endpoint: 'auth' | 'messages', body: Record<string
   return result
 }
 export const errorText = (error: unknown) => error instanceof Error ? error.message : 'Unable to connect. Please try again.'
+export async function uploadStatusMedia(id: string, file: File) {
+  const response = await fetch(`/api/status-media?id=${encodeURIComponent(id)}`, {
+    method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': file.type },
+    body: file, signal: AbortSignal.timeout(90000),
+  })
+  if (!response.headers.get('content-type')?.includes('application/json')) throw new Error('Media upload failed. Please retry with a file up to 3 MB.')
+  const result = await response.json() as { error?: string; media?: StatusPost['media'] }
+  if (!response.ok) throw new ApiError(result.error || 'Media upload failed. Please retry.', response.status)
+  if (!result.media) throw new Error('The server did not confirm the upload. Please retry.')
+  return result.media
+}
 export function Avatar({ name, photo }: { name: string; photo?: string }) {
   return photo
     ? <span className="avatar avatar-violet"><img src={photo} alt={`${name}'s profile`} /></span>

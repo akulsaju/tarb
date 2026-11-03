@@ -538,6 +538,15 @@ button:focus-visible { outline: 2px solid #aa9dff; outline-offset: 3px; }
 .status-viewer .icon-button, .status-viewer .text-action { color: white; }
 .status-body { min-height: 170px; display: flex; align-items: center; justify-content: center; white-space: pre-wrap; overflow-wrap: anywhere; padding: 24px 0; font: 600 23px Manrope, sans-serif; line-height: 1.7; }
 .status-viewer footer { border-top: 1px solid #ffffff30; padding-top: 12px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.status-media-actions { display: flex; gap: 8px; align-items: center; margin: 14px 0 8px; }
+.status-media-actions .outline-action { margin: 0; }
+.status-media-preview { background: #10101a; border-radius: 16px; overflow: hidden; margin-top: 12px; }
+.status-media-preview img, .status-media-preview video { display: block; width: 100%; max-height: 260px; object-fit: contain; }
+.status-input.media-caption { min-height: 90px; font-size: 16px; padding: 14px; }
+.status-media-display { margin: 20px -10px 12px; background: #10101a; border-radius: 14px; overflow: hidden; }
+.status-media-display img, .status-media-display video { display: block; width: 100%; max-height: 55dvh; object-fit: contain; }
+.status-caption { font-size: 16px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.media-error { padding: 12px; color: #ffd2da; font-size: 13px; line-height: 1.6; }
 .delete-confirm { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13px; }
 .delete-confirm button { border: 1px solid #ffffff70; border-radius: 10px; color: white; background: #ffffff10; padding: 10px; }
 @media (max-width: 790px) {

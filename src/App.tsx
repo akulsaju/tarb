@@ -285,7 +285,7 @@ function Workspace({ user, onLogout, onExpired }: { user: Account; onLogout: () 
       </section>
       <section className="conversation glass">
         {tab !== 'Chats' ? <div className="conversation-welcome"><div className="feature-mark">{tab === 'Status' ? <CircleDot size={36} /> : <UserRound size={36} />}</div>
-          <h2>{tab === 'Status' ? 'A moment worth sharing.' : 'Make this space yours.'}</h2><p>{tab === 'Status' ? 'Share a text update with your conversation contacts. Posts disappear from view after 24 hours.' : 'Change your photo, name and profile status. Your contacts see the latest version across VYBE.'}</p></div> : active ? <>
+          <h2>{tab === 'Status' ? 'A moment worth sharing.' : 'Make this space yours.'}</h2><p>{tab === 'Status' ? 'Share a photo, video or text update with your conversation contacts. Posts disappear from view after 24 hours.' : 'Change your photo, name and profile status. Your contacts see the latest version across VYBE.'}</p></div> : active ? <>
           <header className="chat-header">
             <button className="chat-person contact-heading" aria-label="View contact profile" onClick={() => setShowContact(true)}><Avatar name={peer(active).name} photo={peer(active).photo} /><span><h2>{peer(active).name}</h2><span className="contact-subtitle">{peer(active).about || `@${peer(active).username}`}</span></span></button>
             <div className="header-actions"><button className="icon-button" aria-label="Conversation information" onClick={() => setToast('Stored on the VYBE server. Not end-to-end encrypted. Updates checked every 4 seconds.')}><Info size={20} /></button>

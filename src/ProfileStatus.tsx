@@ -1,7 +1,7 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Camera, Check, CircleDot, ImagePlus, Info, Pencil, Plus, Sparkles, Trash2, X } from 'lucide-react'
-import { Avatar, Profile, StatusPost, request } from './api'
+import { Camera, Check, CircleDot, ImagePlus, Info, Pencil, Plus, Sparkles, Trash2, X, Film } from 'lucide-react'
+import { Avatar, Profile, StatusPost, request, uploadStatusMedia } from './api'
 
 async function preparePhoto(file: File): Promise<string> {
   if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) throw new Error('Choose a JPEG, PNG or WebP photo.')
@@ -108,7 +108,30 @@ export function StatusPanel({ userId, dark, profiles, posts, now, onError, onMut
   const [error, setError] = useState('')
   const [selected, setSelected] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const pending = useRef<{ id: string; text: string; color: string } | null>(null)
+  const pending = useRef<{ id: string; text: string; color: string; file: File | null } | null>(null)
+  const [file, setFile] = useState<File | null>(null)
+  const [preview, setPreview] = useState('')
+  const [mediaReady, setMediaReady] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [playbackError, setPlaybackError] = useState(false)
+  const [playbackRetry, setPlaybackRetry] = useState(0)
+  const mediaInput = useRef<HTMLInputElement>(null)
+  const uploaded = useRef<{ file: File; id: string } | null>(null)
+  useEffect(() => {
+    if (!file) { setPreview(''); return }
+    const url = URL.createObjectURL(file)
+    setPreview(url)
+    return () => URL.revokeObjectURL(url)
+  }, [file])
+  function chooseMedia(value?: File) {
+    if (!value) return
+    setError('')
+    if (!['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/webm'].includes(value.type)) {
+      setError('Choose a JPEG, PNG, WebP photo or MP4/WebM video.'); return
+    }
+    if (!value.size || value.size > 3 * 1024 * 1024) { setError('Choose a non-empty photo or video up to 3 MB.'); return }
+    setMediaReady(false); setFile(value); pending.current = null; uploaded.current = null
+  }
   const own = profiles.find((profile) => profile.id === userId)!
   const author = (id: string) => profiles.find((profile) => profile.id === id)
   const viewing = posts.find((post) => post.id === selected)
@@ -116,17 +139,24 @@ export function StatusPanel({ userId, dark, profiles, posts, now, onError, onMut
   const contactPosts = posts.filter((post) => post.userId !== userId).sort((a, b) => b.createdAt - a.createdAt)
   async function publish(event: React.FormEvent) {
     event.preventDefault()
-    if (busy || !text.trim()) return
+    if (busy || (!text.trim() && !file) || (file && !mediaReady)) return
     const value = text.trim()
-    const postId = pending.current?.text === value && pending.current.color === color ? pending.current.id : crypto.randomUUID()
-    pending.current = { id: postId, text: value, color }
+    const postId = file && uploaded.current?.file === file ? uploaded.current.id
+      : pending.current?.text === value && pending.current.color === color && pending.current.file === file ? pending.current.id : crypto.randomUUID()
+    pending.current = { id: postId, text: value, color, file }
     setBusy(true); setError(''); onMutate()
     try {
-      const result = await request('messages', { action: 'status-post', postId, text: value, color })
+      if (file && uploaded.current?.id !== postId) {
+        setUploading(true)
+        await uploadStatusMedia(postId, file)
+        uploaded.current = { file, id: postId }
+        setUploading(false)
+      }
+      const result = await request('messages', { action: 'status-post', postId, text: value, color, ...(file ? { mediaId: postId } : {}) })
       if (!result.statuses) throw new Error('The server did not confirm the post. Please retry.')
-      onChanged(result.statuses); setComposing(false); setText(''); pending.current = null
+      onChanged(result.statuses); setComposing(false); setText(''); setFile(null); pending.current = null; uploaded.current = null
     } catch (error) { setError(onError(error)) }
-    finally { setBusy(false) }
+    finally { setBusy(false); setUploading(false) }
   }
   async function remove() {
     if (!viewing || busy) return
@@ -138,35 +168,49 @@ export function StatusPanel({ userId, dark, profiles, posts, now, onError, onMut
     } catch (error) { setError(onError(error)) }
     finally { setBusy(false) }
   }
-  function open(id: string) { setSelected(id); setConfirmDelete(false); setError('') }
+  function open(id: string) { setSelected(id); setConfirmDelete(false); setError(''); setPlaybackError(false); setPlaybackRetry(0) }
   return <div className="feature-content">
     <button className="status-create" onClick={() => { setComposing(true); setError('') }}><span className="status-avatar"><Avatar name={own.name} photo={own.photo} /><i><Plus size={13} /></i></span>
-      <span><b>My status</b><small>Share a 24-hour text update</small></span><Pencil size={18} /></button>
-    <div className="status-audience"><Info size={15} /> Visible to your conversation contacts. Text posts only, up to 10 active posts.</div>
+      <span><b>My status</b><small>Share a photo, video or text</small></span><Pencil size={18} /></button>
+    <div className="status-audience"><Info size={15} /> Visible to your conversation contacts for 24 hours. Up to 10 active posts.</div>
     {ownPosts.length > 0 && <section className="profile-group"><h3>MY UPDATES · {ownPosts.length}</h3>{ownPosts.map((post) =>
-      <button key={post.id} className="status-list-row" onClick={() => open(post.id)}><span className={`status-swatch status-${post.color}`}><CircleDot size={20} /></span><span><b>{post.text}</b><small>{Math.max(1, Math.ceil((post.expiresAt - now) / 3600000))}h left</small></span></button>)}</section>}
+      <button key={post.id} className="status-list-row" onClick={() => open(post.id)}><span className={`status-swatch status-${post.color}`}>{post.media?.kind === 'video' ? <Film size={20} /> : post.media ? <ImagePlus size={20} /> : <CircleDot size={20} />}</span><span><b>{post.text || (post.media?.kind === 'video' ? 'Video status' : 'Photo status')}</b><small>{post.media ? `${post.media.kind === 'video' ? 'Video' : 'Photo'} · ` : ''}{Math.max(1, Math.ceil((post.expiresAt - now) / 3600000))}h left</small></span></button>)}</section>}
     <section className="profile-group"><h3>CONTACT UPDATES</h3>
       {contactPosts.map((post) => {
         const person = author(post.userId)
         if (!person) return null
-        return <button key={post.id} className="status-list-row" onClick={() => open(post.id)}><span className="status-ring"><Avatar name={person.name} photo={person.photo} /></span><span><b>{person.name}</b><small>{post.text}</small></span></button>
+        return <button key={post.id} className="status-list-row" onClick={() => open(post.id)}><span className="status-ring"><Avatar name={person.name} photo={person.photo} /></span><span><b>{person.name}</b><small>{post.media ? `${post.media.kind === 'video' ? 'Video' : 'Photo'}${post.text ? ' · ' : ''}` : ''}{post.text}</small></span></button>
       })}
       {!contactPosts.length && <div className="real-empty"><CircleDot size={28} /><h3>No recent updates</h3><p>Your contacts’ 24-hour posts will appear here.</p></div>}
     </section>
     {selected && !viewing && <p className="field-hint" role="status">This post has expired or was deleted.<button className="text-action" onClick={() => setSelected(null)}>Dismiss</button></p>}
     {composing && createPortal(<div className={`feature-overlay ${dark ? 'dark' : ''}`}><div className="modal-backdrop"><section className="new-chat glass status-compose" role="dialog" aria-modal="true" aria-labelledby="status-compose-title">
       <div className="modal-head"><h2 id="status-compose-title">Share a moment</h2><button className="icon-button" aria-label="Close status composer" disabled={busy} onClick={() => setComposing(false)}><X size={20} /></button></div>
-      <form onSubmit={publish}><textarea className={`status-input status-${color}`} aria-label="Status text" placeholder="What’s on your mind?" value={text} onChange={(e) => setText(e.target.value)} maxLength={700} rows={6} required disabled={busy} />
+      <form onSubmit={publish}>
+        <input ref={mediaInput} type="file" className="visually-hidden" aria-label="Choose status photo or video" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" disabled={busy}
+          onChange={(event) => { const selected = event.target.files?.[0]; event.target.value = ''; chooseMedia(selected) }} />
+        <div className="status-media-actions"><button type="button" className="outline-action" disabled={busy} onClick={() => mediaInput.current?.click()}><ImagePlus size={17} /> {file ? 'Change media' : 'Add photo or video'}</button>
+          {file && <button type="button" className="text-action" disabled={busy} onClick={() => { setFile(null); setMediaReady(false); setError(''); uploaded.current = null; pending.current = null }}><Trash2 size={16} /> Remove</button>}</div>
+        <p className="field-hint">Up to 3 MB · JPEG, PNG, WebP, MP4 or WebM. MP4 with H.264/AAC is recommended for phones.</p>
+        {file && preview && <div className="status-media-preview">{file.type.startsWith('video/') ? <video key={preview} src={preview} controls playsInline preload="metadata"
+          onLoadedMetadata={() => setMediaReady(true)} onError={() => { setMediaReady(false); setError('This device cannot play that video. Try an H.264 MP4 video.') }} />
+          : <img src={preview} alt="Selected status preview" onLoad={() => setMediaReady(true)} onError={() => { setMediaReady(false); setError('This image could not be opened. Choose another photo.') }} />}</div>}
+        <textarea className={`status-input ${file ? 'media-caption' : ''} status-${color}`} aria-label="Status text" placeholder={file ? 'Add a caption (optional)' : 'What’s on your mind?'} value={text} onChange={(e) => setText(e.target.value)} maxLength={700} rows={file ? 2 : 6} required={!file} disabled={busy} />
         <div className="status-colors" aria-label="Status background">{(['violet', 'ocean', 'rose'] as const).map((value) => <button type="button" aria-label={`${value} background`} aria-pressed={color === value} disabled={busy} key={value} className={`status-${value}`} onClick={() => setColor(value)}>{color === value && <Check size={18} />}</button>)}<span>{text.length}/700</span></div>
         <p className="field-hint">Expires 24 hours after posting. Visible to your conversation contacts.</p>
         {error && <p className="service-error" role="alert">{error}</p>}
-        <button className="auth-submit" disabled={busy || !text.trim()}>{busy ? 'Posting…' : 'Post status'}</button>
+        <button className="auth-submit" disabled={busy || (!text.trim() && !file) || (!!file && !mediaReady)}>{uploading ? 'Uploading media…' : busy ? 'Posting…' : 'Post status'}</button>
       </form>
     </section></div></div>, document.body)}
     {viewing && createPortal(<div className={`feature-overlay ${dark ? 'dark' : ''}`}><div className="modal-backdrop"><section className={`status-viewer status-${viewing.color}`} role="dialog" aria-modal="true" aria-labelledby="status-author">
       <header><Avatar name={author(viewing.userId)?.name || 'VYBE member'} photo={author(viewing.userId)?.photo} /><span><b id="status-author">{author(viewing.userId)?.name}</b><small>{new Date(viewing.createdAt).toLocaleString()}</small></span>
         <button className="icon-button" aria-label="Close status" disabled={busy} onClick={() => { setSelected(null); setError('') }}><X size={22} /></button></header>
-      <p className="status-body">{viewing.text}</p><footer><small>{Math.max(1, Math.ceil((viewing.expiresAt - now) / 3600000))} hours remaining</small>
+      {viewing.media && <div className="status-media-display">{viewing.media.kind === 'photo'
+        ? <img key={`${viewing.id}-${playbackRetry}`} src={`/api/status-media?id=${viewing.media.id}&retry=${playbackRetry}`} alt={viewing.text || 'Photo status'} onError={() => setPlaybackError(true)} />
+        : <video key={`${viewing.id}-${playbackRetry}`} src={`/api/status-media?id=${viewing.media.id}&retry=${playbackRetry}`} controls playsInline preload="metadata" onError={() => setPlaybackError(true)} />}
+        {playbackError && <p className="media-error" role="alert">Could not open this media. It may have expired, or your device may not support the video format.<button type="button" className="text-action" onClick={() => { setPlaybackError(false); setPlaybackRetry((value) => value + 1) }}>Retry</button></p>}
+      </div>}
+      {viewing.text && <p className={viewing.media ? 'status-caption' : 'status-body'}>{viewing.text}</p>}<footer><small>{Math.max(1, Math.ceil((viewing.expiresAt - now) / 3600000))} hours remaining</small>
         {viewing.userId === userId && (!confirmDelete ? <button className="text-action" onClick={() => setConfirmDelete(true)}><Trash2 size={16} /> Delete post</button> : <div className="delete-confirm"><span>Delete this post?</span><button disabled={busy} onClick={() => void remove()}>{busy ? 'Deleting…' : 'Confirm delete'}</button><button disabled={busy} onClick={() => setConfirmDelete(false)}>Cancel</button></div>)}
       </footer>{error && <p className="service-error" role="alert">{error}</p>}
     </section></div></div>, document.body)}
